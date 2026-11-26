@@ -1,4 +1,4 @@
-/* V14 (14/10/2026), V16 (15/10/2026) : moteur des pages intérieures (body.page-v14).
+/* ATC V14 (14/10/2026), V16 (15/10/2026) : moteur des pages intérieures (body.page-v14).
 
    RÈGLES DE MOUVEMENT (V16, toutes les pages intérieures ; l'accueil suit les mêmes)
    Mouvement                  Durée                       Courbe                     Déclenchement                       Mouvement réduit
@@ -27,20 +27,18 @@
    restent chargés tels quels. */
 (function () {
   'use strict';
-  function vrai(m) { return !!m && m['ma' + 'tches']; }
-  function sur(f) { var r = null; try { r = f(); } finally { return r; } }
   var body = document.body;
   if (!body || !body.classList.contains('page-v14') || body.dataset.v14) return;
   body.dataset.v14 = 'pret';
-  var reduce = window['ma' + 'tchMedia']('(prefers-reduced-motion: reduce)');
-  var mobile = window['ma' + 'tchMedia']('(max-width: 759px)');
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var mobile = window.matchMedia('(max-width: 759px)');
   var COURBE = 'cubic-bezier(.22,.68,0,1)';
   var COURBE_TITRE = 'cubic-bezier(.2,.7,0,1)';
   var clamp = function (n, a, b) { return Math.max(a, Math.min(b, n)); };
   var lisse = function (p) { return p * p * (3 - 2 * p); };
   var animer = function (el, frames, options) {
-    if (!el || !el.animate || vrai(reduce) || document.hidden) return null;
-    return sur(function () { return el.animate(frames, options); });
+    if (!el || !el.animate || reduce.matches || document.hidden) return null;
+    try { return el.animate(frames, options); } catch (e) { return null; }
   };
   function rayon(el) {
     var cs = getComputedStyle(el);
@@ -67,7 +65,7 @@
 
   /* ---------- 1. Entrée du bandeau ---------- */
   var bandeau = body.querySelector('.v14-bandeau');
-  if (bandeau && !vrai(reduce) && window.scrollY < 40 && !location.hash) {
+  if (bandeau && !reduce.matches && window.scrollY < 40 && !location.hash) {
     var morceaux = Array.from(bandeau.querySelectorAll('.v14-bandeau__texte > *'));
     morceaux.forEach(function (el, i) {
       animer(el, [{ opacity: 0, transform: 'translateY(18px)' }, { opacity: 1, transform: 'none' }],
@@ -169,7 +167,7 @@
         if (x.c.groupe) {
           var n = rangs.get(x.c.groupe) || 0, total = groupes.get(x.c.groupe);
           rangs.set(x.c.groupe, n + 1);
-          var pas = x.c.serie ? (vrai(mobile) ? 80 : 90) : (vrai(mobile) ? 60 : 70);
+          var pas = x.c.serie ? (mobile.matches ? 80 : 90) : (mobile.matches ? 60 : 70);
           var budget = x.c.serie ? 900 : 480;
           if (total > 1) pas = Math.min(pas, budget / (total - 1));
           delai += Math.round(n * pas);
@@ -184,7 +182,7 @@
     if (document.hidden) enCours.forEach(function (a) { a.finish(); });
   });
   reduce.addEventListener && reduce.addEventListener('change', function () {
-    if (vrai(reduce)) enCours.forEach(function (a) { a.cancel(); });
+    if (reduce.matches) enCours.forEach(function (a) { a.cancel(); });
   });
   window.addEventListener('beforeprint', function () { enCours.forEach(function (a) { a.finish(); }); });
 
@@ -215,12 +213,12 @@
     var delta = dernier ? Math.min(48, t - dernier) : 0, actif = false;
     dernier = t;
     cycles.forEach(function (r) {
-      if (r.ratio < .25 || r.pause || r.doigt || vrai(reduce)) return;
+      if (r.ratio < .25 || r.pause || r.doigt || reduce.matches) return;
       actif = true; r.temps += delta; r.peindre(cycle(r.temps));
     });
     if (actif) programmer(); else dernier = 0;
   }
-  function programmer() { if (!image && !document.hidden && !vrai(reduce)) image = requestAnimationFrame(tic); }
+  function programmer() { if (!image && !document.hidden && !reduce.matches) image = requestAnimationFrame(tic); }
   function arreterCycles() { if (image) cancelAnimationFrame(image); image = 0; dernier = 0; }
 
   function comparateur(fig) {
@@ -269,7 +267,7 @@
       if (r) r.doigt = true;
       if (pointeur.souris) {
         prendre(); placer(e.clientX);
-        sur(function () { fig.setPointerCapture(e.pointerId); });
+        try { fig.setPointerCapture(e.pointerId); } catch (_) {}
         input.focus({ preventScroll: true }); e.preventDefault();
       }
     });
@@ -277,7 +275,7 @@
       if (!pointeur || pointeur.id !== e.pointerId) return;
       var dx = Math.abs(e.clientX - pointeur.x), dy = Math.abs(e.clientY - pointeur.y);
       if (pointeur.souris || pointeur.horizontal || (dx > 10 && dx > dy * 1.4)) {
-        if (!pointeur.horizontal && !pointeur.souris) { sur(function () { fig.setPointerCapture(e.pointerId); }); }
+        if (!pointeur.horizontal && !pointeur.souris) { try { fig.setPointerCapture(e.pointerId); } catch (_) {} }
         pointeur.horizontal = true; prendre(); placer(e.clientX);
       }
     });
@@ -290,12 +288,12 @@
     ['pointercancel', 'lostpointercapture'].forEach(function (t) { fig.addEventListener(t, lacher); });
     fig.addEventListener('dragstart', function (e) { e.preventDefault(); });
 
-    if (vrai(reduce)) { peindre(50); return; }
+    if (reduce.matches) { peindre(50); return; }
     if (mode === 'defilement') {
       // Le volet suit la position de la photo : avant à 90 % de l'écran, après à 50 %.
       var suivre = function () {
         attente = 0;
-        if (vrai(reduce)) return;
+        if (reduce.matches) return;
         var b = fig.getBoundingClientRect(), h = window.innerHeight || 1;
         if (b.bottom < 0 || b.top > h) { pris = false; return; }   // hors de l'écran : le défilement reprend la main
         if (pris) return;
@@ -329,7 +327,7 @@
         if (pris) return;
         var depart = null;
         var pas = function (t) {
-          if (pris || vrai(reduce)) return;
+          if (pris || reduce.matches) return;
           if (depart === null) depart = t;
           var q = Math.min(1, (t - depart) / 900);
           peindre(50 + 12 * Math.sin(q * Math.PI * 2) * (1 - q));
@@ -368,7 +366,7 @@
   document.addEventListener('visibilitychange', function () { arreterCycles(); if (!document.hidden) programmer(); });
   reduce.addEventListener && reduce.addEventListener('change', function () {
     arreterCycles();
-    if (!vrai(reduce)) { programmer(); return; }
+    if (!reduce.matches) { programmer(); return; }
     body.querySelectorAll('[data-v14-comparateur]').forEach(function (fig) {
       fig.style.setProperty('--pos', '50%');
       var i = fig.querySelector('input[type="range"]'); if (i) i.value = '50';
@@ -414,8 +412,8 @@
       video.removeAttribute('tabindex');
       if (!video.getAttribute('src') && video.dataset.src) video.src = video.dataset.src;
       var essai = video.play();
-      if (essai && essai.then) essai.then(null, function () {});
-      sur(function () { video.focus({ preventScroll: true }); });
+      if (essai && essai.catch) essai.catch(function () {});
+      try { video.focus({ preventScroll: true }); } catch (_) {}
     });
     video.addEventListener('loadedmetadata', function () {
       var w = video.videoWidth, h = video.videoHeight;
@@ -458,12 +456,12 @@
     var reprendreA = 0;
     video.addEventListener('pause', function () { if (!complete) reprendreA = video.currentTime; });
     function jouer() {
-      if (complete || pauseHumaine || document.hidden || vrai(reduce) || fig.classList.contains('v14-video--arret')) return;
+      if (complete || pauseHumaine || document.hidden || reduce.matches || fig.classList.contains('v14-video--arret')) return;
       charge = true;
       // Le moteur de Safari peut remettre une vidéo sortie de l'écran à zéro : elle reprend là où elle s'était arrêtée.
-      if (reprendreA > .3 && video.currentTime < .05) { sur(function () { video.currentTime = reprendreA; }); }
+      if (reprendreA > .3 && video.currentTime < .05) { try { video.currentTime = reprendreA; } catch (_) {} }
       var essai = video.play();
-      if (essai && essai.then) essai.then(null, function (e) { if (e && e.name === 'NotAllowedError') arret(); });
+      if (essai && essai.catch) essai.catch(function (e) { if (e && e.name === 'NotAllowedError') arret(); });
     }
     function decider() {
       if (complete) { if ((document.hidden || ratio === 0) && !video.paused) video.pause(); return; }
@@ -478,10 +476,10 @@
       video.controls = true; video.removeAttribute('tabindex');
       var plein = video.getAttribute('data-complet');
       if (plein && video.currentSrc.indexOf(plein) < 0) { video.preload = 'auto'; video.src = plein; }
-      else { sur(function () { video.currentTime = 0; }); }
+      else { try { video.currentTime = 0; } catch (_) {} }
       var essai = video.play();
-      if (essai && essai.then) essai.then(null, function () {});
-      sur(function () { video.focus({ preventScroll: true }); });
+      if (essai && essai.catch) essai.catch(function () {});
+      try { video.focus({ preventScroll: true }); } catch (_) {}
     }
     if (bouton) bouton.addEventListener('click', ouvrirComplete);
     video.addEventListener('playing', function () { fig.classList.add('is-joue'); erreur.hidden = true; });
@@ -497,8 +495,8 @@
       decider();
     }, { threshold: [0, .05, .5, 1] }).observe(cadre);
     document.addEventListener('visibilitychange', decider);
-    reduce.addEventListener && reduce.addEventListener('change', function () { if (vrai(reduce) && !complete) arret(); });
-    if (vrai(reduce) || econome) { arret(); return; }
+    reduce.addEventListener && reduce.addEventListener('change', function () { if (reduce.matches && !complete) arret(); });
+    if (reduce.matches || econome) { arret(); return; }
     maj = boutonPause(cadre, 'la vidéo', function () {
       pauseHumaine = !pauseHumaine;
       maj(pauseHumaine);
